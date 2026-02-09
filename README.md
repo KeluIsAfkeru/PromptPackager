@@ -4,6 +4,14 @@
 
 ## 📸 Features
 
+<p align="center">
+  <img width="1127" height="851" alt="c034958f8ef7873dff1ce20735301443" src="https://github.com/user-attachments/assets/ef0b3b68-d7e5-4b1f-87dd-065ad00a0553" />
+</p>
+
+<p align="center">
+  <img width="1235" height="740" alt="5d9bf337b46b2f80cd1aaf36bf37269c" src="https://github.com/user-attachments/assets/5f518718-856c-4217-8e8f-45cfead69ca9" />
+</p>
+
 * **Material Design 3 主题** 非常好看现代化的UI设计:
 * **多线程异步处理**: 扫描大文件夹或生成大文件时保持前台流畅
 * **灵活的输出格式**: 支持 Markdown 和 XML 
