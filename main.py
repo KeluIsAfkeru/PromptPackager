@@ -18,10 +18,11 @@ ctk.set_default_color_theme("dark-blue")
 class ModernApp(ctk.CTk):
     def __init__(self):
         super().__init__()
-        self.title("Prompt Packager Pro v1.0.2 - By Afkeru")
-        self._center_window(900, 650) 
+        self.title("Prompt Packager Pro v1.3 - By 克鲁IsAfkeru")
+        self._center_window(1000, 700) 
         
         self.engine = AsyncEngine(self)
+        self.workspace_root = Path.cwd()
         self.current_path = Path.cwd()
         self.history_stack = []
         self.output_dir = Path.cwd() / "output"
@@ -29,7 +30,9 @@ class ModernApp(ctk.CTk):
         
         self.configure(fg_color=Material3.pair("bg"))
         self._init_ui()
-        self.navigate(self.current_path)
+        
+        self.addr_bar.insert(0, str(self.workspace_root))
+        self.navigate(self.workspace_root)
 
     def _center_window(self, w, h):
         screen_width = self.winfo_screenwidth()
@@ -52,7 +55,7 @@ class ModernApp(ctk.CTk):
         self._setup_main_area()
 
     def _setup_sidebar(self):
-        ctk.CTkLabel(self.sidebar, text="✨ PromptPackager", font=("Microsoft YaHei UI", 22, "bold"), 
+        ctk.CTkLabel(self.sidebar, text="⚡ PromptPackager", font=("Microsoft YaHei UI", 22, "bold"), 
                    text_color=Material3.pair("primary")).pack(anchor="w", padx=10, pady=(25, 15))
 
         self.fmt_var = tk.StringVar(value="markdown")
@@ -91,7 +94,19 @@ class ModernApp(ctk.CTk):
                                     fg_color=Material3.pair("surface_variant"),
                                     text_color=Material3.pair("text"))
         self.ign_box.pack(fill="x", padx=20, pady=5)
-        self.ign_box.insert("0.0", "node_modules;.git;__pycache__;*.pyc;*.png;*.jpg;*.exe;.vscode")
+        
+        default_ignores = (
+            "node_modules;.git;.svn;.hg;.idea;.vscode;.DS_Store;dist;build;coverage;venv;.env;"
+            "__pycache__;*.pyc;*.pyo;*.pyd;*.class;"
+            "*.exe;*.dll;*.so;*.dylib;*.bin;*.msi;*.apk;*.ipa;*.iso;*.img;*.dmg;"
+            "*.zip;*.tar;*.gz;*.rar;*.7z;*.jar;*.war;*.ear;*.bz2;*.xz;"
+            "*.png;*.jpg;*.jpeg;*.gif;*.bmp;*.ico;*.svg;*.tiff;*.webp;*.psd;*.ai;*.eps;*.icns;"
+            "*.mp3;*.mp4;*.wav;*.avi;*.mov;*.flv;*.wmv;*.mkv;*.m4a;*.flac;"
+            "*.pdf;*.doc;*.docx;*.xls;*.xlsx;*.ppt;*.pptx;*.odt;*.ods;"
+            "*.ttf;*.otf;*.woff;*.woff2;*.eot;"
+            "*.blend;*.fbx;*.obj;*.stl;*.max;*.ma;*.mb"
+        )
+        self.ign_box.insert("0.0", default_ignores)
 
         sel_header = ctk.CTkFrame(self.sidebar, fg_color="transparent")
         sel_header.pack(fill="x", padx=20, pady=(20, 5))
@@ -126,9 +141,9 @@ class ModernApp(ctk.CTk):
                                    fg_color=Material3.pair("surface"),
                                    text_color=Material3.pair("text"))
         self.addr_bar.pack(side="left", fill="x", expand=True, padx=10)
-        self.addr_bar.bind("<Return>", lambda e: self.navigate(Path(self.addr_bar.get())))
+        self.addr_bar.bind("<Return>", lambda e: self.navigate_and_set_root(Path(self.addr_bar.get())))
         
-        self._nav_btn(nav, "📂", self.browse_folder, width=40)
+        self._nav_btn(nav, "📂 设置根目录", self.browse_folder, width=100)
 
         self.file_tree = ModernFileTree(self.main_area, self.navigate, self.on_tree_toggle)
         self.file_tree.grid(row=1, column=0, sticky="nsew")
@@ -136,7 +151,7 @@ class ModernApp(ctk.CTk):
         self.bottom_bar = ctk.CTkFrame(self.main_area, fg_color="transparent", height=50)
         self.bottom_bar.grid(row=2, column=0, sticky="ew", pady=(10, 0))
 
-        self.status_lbl = ctk.CTkLabel(self.bottom_bar, text="就绪", anchor="w", text_color=Material3.pair("text_dim"))
+        self.status_lbl = ctk.CTkLabel(self.bottom_bar, text=f"工作区: {self.workspace_root.name}", anchor="w", text_color=Material3.pair("text_dim"))
         self.status_lbl.pack(side="left", padx=10)
 
         self.action_btn = ctk.CTkButton(self.bottom_bar, text="🚀 开始生成", height=38, width=130, corner_radius=19,
@@ -159,38 +174,41 @@ class ModernApp(ctk.CTk):
         self.current_path = path
         self.addr_bar.delete(0, tk.END)
         self.addr_bar.insert(0, str(path))
-        self.status_lbl.configure(text="加载中...")
         self.engine.run(self._scan, self.file_tree.populate, path)
+
+    def navigate_and_set_root(self, path):
+        self.workspace_root = path
+        self.status_lbl.configure(text=f"工作区: {self.workspace_root.name}")
+        self.navigate(path)
 
     def _scan(self, path):
         data = []
         try:
             with os.scandir(path) as it:
-                entries = list(it)
-            entries.sort(key=lambda e: (not e.is_dir(), e.name.lower()))
-            for e in entries:
-                if e.name.startswith('.'): continue
-                sz = ""
-                if not e.is_dir():
-                    try: sz = f"{e.stat().st_size/1024:.1f} KB"
-                    except: sz = "N/A"
-                mtime = ""
-                try: 
-                    import datetime
-                    mtime = datetime.datetime.fromtimestamp(e.stat().st_mtime).strftime('%Y-%m-%d')
-                except: pass
-                data.append({
-                    "name": e.name, "path": str(e.path), "is_dir": e.is_dir(),
-                    "size_str": sz, "date": mtime
-                })
+                for e in it:
+                    if e.name.startswith('.'): continue
+                    sz = ""
+                    if not e.is_dir():
+                        try: sz = f"{e.stat().st_size/1024:.1f} KB"
+                        except: sz = "N/A"
+                    mtime = ""
+                    try: 
+                        import datetime
+                        mtime = datetime.datetime.fromtimestamp(e.stat().st_mtime).strftime('%Y-%m-%d')
+                    except: pass
+                    data.append({
+                        "name": e.name, "path": str(e.path), "is_dir": e.is_dir(),
+                        "size_str": sz, "date": mtime
+                    })
         except: pass
         return data
 
     def on_tree_toggle(self, item_path, is_selecting, recursive=False):
-        self.update_selection_ui()
+        if not recursive:
+            self.update_selection_ui()
         
         if recursive and item_path:
-            self.status_lbl.configure(text="正在处理文件夹内容..." if is_selecting else "正在移除文件夹内容...")
+            self.status_lbl.configure(text="正在处理..." if is_selecting else "正在移除...")
             ignores = self.ign_box.get("0.0", "end").replace("\n", ";").split(";")
             
             task_args = {
@@ -226,26 +244,28 @@ class ModernApp(ctk.CTk):
             self.file_tree.selection_map.update(affected_items)
         else:
             self.file_tree.selection_map.difference_update(affected_items)
-        self.file_tree.bulk_update_visuals()
+        
+        self.file_tree.bulk_update_visuals(affected_items)
         self.update_selection_ui()
 
     def update_selection_ui(self):
-        all_items = list(self.file_tree.selection_map)
-        files_only = [p for p in all_items if Path(p).is_file()]
-        files_only.sort()
+        count = len([x for x in self.file_tree.selection_map if not x.endswith(os.sep) and os.path.isfile(x)])
         
-        count = len(files_only)
-        self.status_lbl.configure(text=f"已选 {count} 个文件")
+        self.status_lbl.configure(text=f"工作区: {self.workspace_root.name} | 已选 {count} 个文件")
         
         for w in self.sel_list_frame.winfo_children(): w.destroy()
         
-        if count > 100:
-            ctk.CTkLabel(self.sel_list_frame, text=f"已选择 {count} 个文件\n数量过多，不显示详情", 
-                       text_color=Material3.pair("text_dim")).pack(pady=20)
-            return
+        LIMIT = 40 
+        
+        display_files = []
+        i = 0
+        for p in self.file_tree.selection_map:
+            if os.path.isfile(p):
+                display_files.append(p)
+                i += 1
+                if i >= LIMIT: break
 
-        for path_str in files_only:
-            p = Path(path_str)
+        for path_str in display_files:
             row = ctk.CTkFrame(self.sel_list_frame, fg_color="transparent", height=28)
             row.pack(fill="x", pady=1)
             
@@ -253,8 +273,15 @@ class ModernApp(ctk.CTk):
                         fg_color="transparent", text_color=Material3.pair("error"), hover_color=Material3.pair("surface_variant"),
                         command=lambda x=path_str: self.file_tree.remove_specific(x)).pack(side="right")
             
-            ctk.CTkLabel(row, text=p.name, anchor="w", font=("Microsoft YaHei UI", 11),
+            d_name = Path(path_str).name
+
+            ctk.CTkLabel(row, text=d_name, anchor="w", font=("Microsoft YaHei UI", 11),
                        text_color=Material3.pair("text")).pack(side="left", fill="x", expand=True)
+
+        if count > LIMIT:
+             ctk.CTkLabel(self.sel_list_frame, text=f"...以及其他 {count - LIMIT} 个文件", 
+                        font=("Microsoft YaHei UI", 11, "italic"),
+                        text_color=Material3.pair("primary")).pack(pady=5)
 
     def clear_all_selection(self):
         self.file_tree.clear_selection()
@@ -279,11 +306,15 @@ class ModernApp(ctk.CTk):
         self.navigate(self.current_path.parent)
         
     def browse_folder(self):
-        if d := filedialog.askdirectory(): self.navigate(Path(d))
+        if d := filedialog.askdirectory(): 
+            p = Path(d)
+            self.workspace_root = p
+            self.status_lbl.configure(text=f"工作区: {self.workspace_root.name}")
+            self.navigate(p)
 
     def start_process(self):
         all_items = list(self.file_tree.selection_map)
-        files = [x for x in all_items if Path(x).is_file()]
+        files = [x for x in all_items if os.path.isfile(x)]
         
         if not files: return messagebox.showwarning("提示", "请至少选择一个文件")
         
@@ -293,7 +324,7 @@ class ModernApp(ctk.CTk):
             'fmt': self.fmt_var.get(),
             'ign': self.ign_box.get("0.0", "end").replace("\n", ";").split(";"),
             'src': files,
-            'root': self.current_path,
+            'root': self.workspace_root,
             'rel_path': self.rel_path_var.get(),
             'compress': self.compress_var.get()
         }
@@ -303,6 +334,16 @@ class ModernApp(ctk.CTk):
         is_xml = cfg['fmt'] == 'xml'
         ignores = [x.strip() for x in cfg['ign'] if x.strip()]
         
+        calc_root = cfg['root']
+        if cfg['rel_path'] and cfg['src']:
+            try:
+                common = os.path.commonpath(cfg['src'])
+                if common:
+                    common_p = Path(common)
+                    if not str(common_p).startswith(str(cfg['root'])):
+                        calc_root = common_p
+            except: pass
+
         def is_ign(p): return any(fnmatch.fnmatch(Path(p).name, x) for x in ignores)
         
         def read_one_file(f_path_str):
@@ -315,46 +356,57 @@ class ModernApp(ctk.CTk):
                 
                 display_path = p.name
                 if cfg['rel_path']:
-                    try: display_path = str(p.relative_to(cfg['root'])).replace("\\", "/")
-                    except: display_path = p.name
+                    try:
+                        display_path = os.path.relpath(f_path_str, cfg['root']).replace("\\", "/")
+                        if display_path.startswith("..") and display_path.count("..") > 2:
+                             display_path = os.path.relpath(f_path_str, calc_root).replace("\\", "/")
+                    except: pass
                 
                 return {
                     "path": display_path,
                     "content": content,
-                    "ext": p.suffix[1:] if p.suffix else "txt",
-                    "sort_key": str(p).lower() 
+                    "ext": p.suffix[1:] if p.suffix else "txt"
                 }
             except: return None
 
         processed_files = []
-        with ThreadPoolExecutor() as executor:
+        max_w = min(64, (os.cpu_count() or 4) * 8) 
+        with ThreadPoolExecutor(max_workers=max_w) as executor:
             futures = [executor.submit(read_one_file, f) for f in cfg['src']]
             for future in as_completed(futures):
                 res = future.result()
                 if res: processed_files.append(res)
         
-        processed_files.sort(key=lambda x: x['sort_key'])
-
         buf = []
         
         if is_xml:
-            buf.append("<file_index>")
-            for i, f in enumerate(processed_files, 1):
-                buf.append(f'  <entry index="{i}">{f["path"]}</entry>')
-            buf.append("</file_index>\n")
+            buf.append("<project_context>")
+            buf.append("  <file_tree>")
+            for f in processed_files:
+                buf.append(f'    <file path="{f["path"]}" />')
+            buf.append("  </file_tree>")
             
-            buf.append("<documents>")
-            for i, f in enumerate(processed_files, 1):
-                buf.append(f'<document index="{i}">\n<source>{f["path"]}</source>\n<document_content>\n{f["content"]}\n</document_content>\n</document>')
-            buf.append("</documents>")
+            buf.append("  <source_code>")
+            for f in processed_files:
+                safe_content = f['content'].replace("]]>", "]]]]><![CDATA[>")
+                buf.append(f'    <file path="{f["path"]}">')
+                buf.append(f'<![CDATA[\n{safe_content}\n]]>')
+                buf.append('    </file>')
+            buf.append("  </source_code>")
+            buf.append("</project_context>")
         else:
-            buf.append("# File Index")
-            for i, f in enumerate(processed_files, 1):
-                buf.append(f"{i}. {f['path']}")
-            buf.append("\n" + "="*30 + "\n")
+            buf.append("# Project Source Code Context")
+            buf.append("\n## File Tree")
+            for f in processed_files:
+                buf.append(f"- {f['path']}")
             
-            for i, f in enumerate(processed_files, 1):
-                buf.append(f"## File {i}: {f['path']}\n```{f['ext']}\n{f['content']}\n```\n")
+            buf.append("\n" + "="*40 + "\n")
+            
+            for f in processed_files:
+                buf.append(f"## File: {f['path']}")
+                buf.append(f"```{f['ext']}")
+                buf.append(f['content'])
+                buf.append("```\n")
 
         cfg['out'].write_text("\n".join(buf), encoding='utf-8')
         return str(cfg['out'])
